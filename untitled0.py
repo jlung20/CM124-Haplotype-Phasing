@@ -31,14 +31,17 @@ def print_haplotypes(hapl):
 
 def gen_all_compatible(genos):
 	haplotype_possibilities = []
+	print(genos)
 	for geno in genos:
 		haplo_temp = []
 		hetero_cnt = geno.count('1')
-		haps = set()
-
-		print(geno)
-		print(hetero_cnt)
-		haplotype_possibilities.append(haplo_temp)
+		'''haps = set()
+		permute_list = ['1' for ii in range(hetero_cnt)] + ['0' for ii in range(hetero_cnt)]
+		for p in product(permute_list, repeat=(2*hetero_cnt)):
+			if p == '''
+		#print(geno)
+		#print(hetero_cnt)
+		#haplotype_possibilities.append(haplo_temp)
 
 def process_EM(genos):
 	gen_all_compatible(genos)
