@@ -10,6 +10,7 @@ step = 20
 # options currently just include "EM" but will be extended later on
 method = "EM"
 outfile = ""
+end_bits = []
 
 # return the transposed matrix
 def reorient_genos(genos_t):
@@ -20,17 +21,22 @@ def reorient_genos(genos_t):
 	#print(len(genos[0]))
 	return genos
 
-# expects hapl to be a matrix of haplotypes (i.e. hapl[0] is a haplotype of
-# the zeroth individual)
-def print_haplotypes(hapl):
-	h_t = reorient_genos(hapl)
+# expects h_t to be the transpose of the matrix of haplotypes (i.e. h_t[0]
+# is the first allele? of each haplotype
+def print_haplotypes(h_t):
+	#h_t = reorient_genos(hapl)
 	#print(outfile)
 	with(open(outfile, "a+")) as f:
 		rlen = len(h_t[0])
-		for row in h_t:
+		row_cnt = len(h_t)
+		if row_cnt == step + 1:
+			row_cnt = step
+		for jj in range(row_cnt): #row in h_t:
 			for ii in range(rlen - 1):
-				f.write(row[ii] + ' ')
-			f.write(row[rlen - 1] + '\n')
+				f.write(h_t[jj][ii] + ' ')
+			f.write(h_t[jj][rlen - 1] + '\n')
+			'''f.write(row[ii] + ' ')
+			f.write(row[rlen - 1] + '\n')'''
 		'''
 		hapl_len = len(hapl[0])
 		num_hapls = len(hapl)
@@ -89,6 +95,23 @@ def gen_all_compatible(genos):
 			haplo_temp.append((hapl, c_hapl))
 		haplotype_possibilities.append(haplo_temp)
 	return haplotype_possibilities
+
+# checks for parity between the end bits of each inferred haplotype and flips
+# if necessary
+def check_for_parity(hapl):
+	num_hapls = len(hapl)
+	elen = len(end_bits)
+	#print(end_bits)
+	#print([hapl[ii][0] for ii in range(num_hapls)])
+	if num_hapls != elen:
+		print('Houston, we have a problem. Mismatched hapl and end_bits. {} {}'.format(hapl, elen))
+	else:
+		for ii in range(0, num_hapls, 2):
+			if end_bits[ii] != hapl[ii][0]:
+				temp_lst = hapl[ii + 1]
+				hapl[ii + 1] = hapl[ii]
+				hapl[ii] = temp_lst
+	return
 
 # updates the probability of each pair of haplotypes
 def e_step(compat_probs, hapl_probs):
@@ -176,7 +199,14 @@ def process_EM(genos):
 	#print(inferred_hapls)
 	#print(len(inferred_hapls))
 	#print(len(inferred_hapls[0]))
-	print_haplotypes(inferred_hapls)
+	global end_bits
+	if len(end_bits) != 0:
+		check_for_parity(inferred_hapls)
+	h_t = reorient_genos(inferred_hapls)
+	num_hapls = len(inferred_hapls)
+	#print([inferred_hapls[ii][0] for ii in range(num_hapls)])
+	end_bits = h_t[-1]
+	print_haplotypes(h_t)
 	return
 
 
@@ -189,7 +219,7 @@ def main(fname):
 	print(fname)
 	global outfile
 	# CHANGE THIS LINE LATER!!! CURRENTLY TRYING TO AVOID OVERWRITING THE ACTUAL FILE
-	outfile = fname[:-4] + "_sol_wip.txt"
+	outfile = fname[:-4] + "_sol_wip_0.txt"
 	print(outfile)
 	input_mat = []
 	with(open(fname, 'rb')) as f:
@@ -200,11 +230,16 @@ def main(fname):
 	ilen = len(input_mat)
 
 	for ii in range(step, ilen, step):
-		# uncomment this in a bit!!!
-		process_geno(reorient_genos(input_mat[ii - step:ii]))
+		# orig
+		#process_geno(reorient_genos(input_mat[ii - step:ii]))
 		idx = ii
 		print(ii)
-	# need to finish off the remainder here
+		# checking end agreement
+		if ii + 1 < ilen:
+			process_geno(reorient_genos(input_mat[ii - step:ii + 1]))
+		else:
+			process_geno(reorient_genos(input_mat[ii - step:ii]))
+	# need to finish off the remainder herejeff@peabody:/media/jeffjeff@peabody:/media/jeff/New Volume/CSCM124$ head -1000 example_data_1_sol_wip.tx/New Volume/CSCM124$ head -1000 example_data_1_sol_wip.tx
 	process_geno(reorient_genos(input_mat[idx:]))
 	print(len(input_mat))
 
