@@ -29,6 +29,8 @@ def gen_hapl(geno, perm):
 			pidx += 1
 	return hapl
 
+# now that I can generate all the possible haplotypes, I need to do a
+
 # current set of tuning parameters and global variables is below
 step = 20
 # options currently just include "EM" but will be extended later on
@@ -46,22 +48,14 @@ ii = 0
 	#print(permute_list)
 #glen = len(genos)
 
-for p in product([0,1], repeat=hetero_cnt):
+for p in product(['0','1'], repeat=hetero_cnt):
 	# because we've been constructing the complement as well, by the time this
 	# condition is satisfied, we will have examined all unique pairs of haplotypes
-	print(p[0])
-	lp = list(p)
-	# Why does this string comparison not work as expected?
-	print(lp[0] == "1")
-	print(p[0] == "1")
 	if p[0] == "1":
 		break
 	hapl = gen_hapl(geno, p)
 	c_hapl = gen_hapl(geno, compl(p))
-	print(p)
-	print(compl(p))
 	haplo_temp.append((hapl, c_hapl))
-	#print(list(p))
 	ii += 1
 print(haplo_temp[-1])
 print(geno)
