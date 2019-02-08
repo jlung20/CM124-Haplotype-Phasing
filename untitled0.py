@@ -16,21 +16,28 @@ def reorient_genos(genos_t):
 	gtlen = len(genos_t)
 	slen = len(genos_t[0])
 	genos = [[genos_t[jj][ii] for jj in range(gtlen)] for ii in range(slen)]
-	print(len(genos))
-	print(len(genos[0]))
+	#print(len(genos))
+	#print(len(genos[0]))
 	return genos
 
-# TODO: THIS ISN'T ACCEPTING THE RIGHT SORT OF INPUT...
-# expects hapl to be a matrix consisting of pairs of haplotypes
-#
+# expects hapl to be a matrix of haplotypes (i.e. hapl[0] is a haplotype of
+# the zeroth individual)
 def print_haplotypes(hapl):
 	h_t = reorient_genos(hapl)
+	#print(outfile)
 	with(open(outfile, "a+")) as f:
 		rlen = len(h_t[0])
 		for row in h_t:
 			for ii in range(rlen - 1):
 				f.write(row[ii] + ' ')
 			f.write(row[rlen - 1] + '\n')
+		'''
+		hapl_len = len(hapl[0])
+		num_hapls = len(hapl)
+		for ii in range(hapl_len):
+			for jj in range(num_hapls - 1):
+				f.write(hapl[jj][ii] + ' ')
+			f.write(hapl[num_hapls - 1][ii] + '\n')'''
 	return
 
 # expects a haplotype in the first of a list, i.e. ['1', '0', '1']
@@ -62,13 +69,15 @@ def gen_all_compatible(genos):
 	haplotype_possibilities = []
 	#print(genos)
 	for geno in genos:
+		#print(geno)
+		#print(len(haplotype_possibilities))
 		haplo_temp = []
 		hetero_cnt = geno.count('1')
 		#print(geno)
 		#print(hetero_cnt)
 		if hetero_cnt == 0:
 			homo_hapl = tuple(gen_hapl(geno, []))
-			haplotype_possibilities.append((homo_hapl, homo_hapl))
+			haplotype_possibilities.append([(homo_hapl, homo_hapl)])
 			continue
 		for p in product(['0','1'], repeat=hetero_cnt):
 			# because we've been constructing the complement as well, by the time this
@@ -78,21 +87,48 @@ def gen_all_compatible(genos):
 			hapl = tuple(gen_hapl(geno, p))
 			c_hapl = tuple(gen_hapl(geno, compl(p)))
 			haplo_temp.append((hapl, c_hapl))
-			haplotype_possibilities.append(haplo_temp)
+		haplotype_possibilities.append(haplo_temp)
 	return haplotype_possibilities
 
 # updates the probability of each pair of haplotypes
-def e-step(compat_probs, hapl_probs):
+def e_step(compat_probs, hapl_probs):
 	for hapl_list in compat_probs:
-		pass
+		# two for loops; one just computes all P_{h_1}P_{h_2} and the other
+		# updates the probabilities in compat_probs with P_{h_1}P_{h_2} / \sigma
+		ph_sum = 0.0
+		hlen = len(hapl_list)
+		for ii in range(hlen):
+			h1 = hapl_list[ii][0][0]
+			h2 = hapl_list[ii][0][1]
+			ph1_ph2 = hapl_probs[h1] * hapl_probs[h2]
+			hapl_list[ii][1] = ph1_ph2
+			ph_sum += ph1_ph2
+		for ii in range(hlen):
+			hapl_list[ii][1] /= ph_sum
+	return
 
 # updates the probability of each unique haplotype
-def m-step(compat_probs, hapl_probs):
-
+def m_step(compat_probs, hapl_probs):
+	two_n = float(2 * len(compat_probs))
+	num_uniq = len(hapl_probs)
+	prob_dict = {}
+	for uhapl in hapl_probs:
+		prob_dict[uhapl] = 0
+	# sum all the entries in compat_probs corresponding to a given haplotype
+	for hapl_list in compat_probs:
+		for hapl_tuple in hapl_list:
+			for hapl in hapl_tuple[0]:
+				prob_dict[hapl] += hapl_tuple[1]
+	# normalize the probabilities (divide by 2n) and assign to hapl_probs
+	for uhapl in hapl_probs:
+		hapl_probs[uhapl] = prob_dict[uhapl] / two_n
+	return
 
 # function orchestrating the meat of the EM algorithm
 def process_EM(genos):
 	compat_hapls = gen_all_compatible(genos)
+	#print('len(compat_hapls): {}'.format(len(compat_hapls)))
+	#print('len(compat_hapls[0]): {}'.format(len(compat_hapls[0])))
 	hapl_set = set()
 	# generate the set of all unique haplotypes
 	for hapl_list in compat_hapls:
@@ -108,18 +144,39 @@ def process_EM(genos):
 	# initialize probabilities for each haplotype in C(g)
 	for hapl_list in compat_hapls:
 		aug_hapls = []
-		l_len = len(hapl_list)
+		l_len = float(len(hapl_list))
 		for hapl_tuple in hapl_list:
 			aug_hapls.append([hapl_tuple, 1/l_len])
 		compat_probs.append(aug_hapls)
-	print(num_hapls)
+	#print(num_hapls)
 	# run the EM algorithm some number of times
 	for ii in range(10):
-		m-step(compat_probs, hapl_probs)
-		e-step(compat_probs, hapl_probs)
+		m_step(compat_probs, hapl_probs)
+		e_step(compat_probs, hapl_probs)
+		jj = 0
+		'''print('---')
+		for h in hapl_probs:
+			print(hapl_probs[h])
+			jj += 1
+			if jj >= 10:
+				break'''
 	# select the haplotype pair for each genotype that maximizes the probability
-	glen = len(compat_hapls)
-	for ii in range()
+	inferred_hapls = []
+	for hlist in compat_probs:
+		max_prob = hlist[0][1]
+		cur_pair = hlist[0][0]
+		cnt_pairs = len(hlist)
+		for ii in range(1, cnt_pairs):
+			pair_prob = hlist[ii][1]
+			if pair_prob > max_prob:
+				max_prob = pair_prob
+				cur_pair = hlist[ii][0]
+		inferred_hapls.append(cur_pair[0])
+		inferred_hapls.append(cur_pair[1])
+	#print(inferred_hapls)
+	#print(len(inferred_hapls))
+	#print(len(inferred_hapls[0]))
+	print_haplotypes(inferred_hapls)
 	return
 
 
@@ -130,7 +187,10 @@ def process_geno(genos):
 
 def main(fname):
 	print(fname)
-	outfile = fname[:-3] + "_sol.txt"
+	global outfile
+	# CHANGE THIS LINE LATER!!! CURRENTLY TRYING TO AVOID OVERWRITING THE ACTUAL FILE
+	outfile = fname[:-4] + "_sol_wip.txt"
+	print(outfile)
 	input_mat = []
 	with(open(fname, 'rb')) as f:
 		reader = csv.reader(f, delimiter=' ')
@@ -141,8 +201,9 @@ def main(fname):
 
 	for ii in range(step, ilen, step):
 		# uncomment this in a bit!!!
-		#process_geno(reorient_genos(input_mat[ii - step:ii]))
+		process_geno(reorient_genos(input_mat[ii - step:ii]))
 		idx = ii
+		print(ii)
 	# need to finish off the remainder here
 	process_geno(reorient_genos(input_mat[idx:]))
 	print(len(input_mat))

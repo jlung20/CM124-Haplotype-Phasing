@@ -36,6 +36,6 @@ args = commandArgs(trailingOnly=TRUE)
 test_haplotypes = args[1]
 truth_haplotypes = args[2]
 print("Calculating switch accuracy")
-print("Switch accuray is:")
+print("Switch accuracy is:")
 print(1- get_switch_error(test_haplotypes,truth_haplotypes,random))
 print("Thank you, goodbye")
