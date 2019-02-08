@@ -60,20 +60,68 @@ def gen_hapl(geno, perm):
 # for each genotype in genos, generates the set of all compatible haplotype
 def gen_all_compatible(genos):
 	haplotype_possibilities = []
-	print(genos)
+	#print(genos)
 	for geno in genos:
 		haplo_temp = []
 		hetero_cnt = geno.count('1')
-		'''haps = set()
-		permute_list = ['1' for ii in range(hetero_cnt)] + ['0' for ii in range(hetero_cnt)]
-		for p in product(permute_list, repeat=(2*hetero_cnt)):
-			if p == '''
 		#print(geno)
 		#print(hetero_cnt)
-		#haplotype_possibilities.append(haplo_temp)
+		if hetero_cnt == 0:
+			homo_hapl = tuple(gen_hapl(geno, []))
+			haplotype_possibilities.append((homo_hapl, homo_hapl))
+			continue
+		for p in product(['0','1'], repeat=hetero_cnt):
+			# because we've been constructing the complement as well, by the time this
+			# condition is satisfied, we will have examined all unique pairs of haplotypes
+			if p[0] == "1":
+				break
+			hapl = tuple(gen_hapl(geno, p))
+			c_hapl = tuple(gen_hapl(geno, compl(p)))
+			haplo_temp.append((hapl, c_hapl))
+			haplotype_possibilities.append(haplo_temp)
+	return haplotype_possibilities
 
+# updates the probability of each pair of haplotypes
+def e-step(compat_probs, hapl_probs):
+	for hapl_list in compat_probs:
+		pass
+
+# updates the probability of each unique haplotype
+def m-step(compat_probs, hapl_probs):
+
+
+# function orchestrating the meat of the EM algorithm
 def process_EM(genos):
-	gen_all_compatible(genos)
+	compat_hapls = gen_all_compatible(genos)
+	hapl_set = set()
+	# generate the set of all unique haplotypes
+	for hapl_list in compat_hapls:
+		for hapl_tuple in hapl_list:
+			for hapl in hapl_tuple:
+				hapl_set.add(hapl)
+	hapl_probs = {}
+	num_hapls = len(hapl_set)
+	# intialize the probabilities for each unique haplotype
+	for hapl in hapl_set:
+		hapl_probs[hapl] = 1.0/num_hapls
+	compat_probs = []
+	# initialize probabilities for each haplotype in C(g)
+	for hapl_list in compat_hapls:
+		aug_hapls = []
+		l_len = len(hapl_list)
+		for hapl_tuple in hapl_list:
+			aug_hapls.append([hapl_tuple, 1/l_len])
+		compat_probs.append(aug_hapls)
+	print(num_hapls)
+	# run the EM algorithm some number of times
+	for ii in range(10):
+		m-step(compat_probs, hapl_probs)
+		e-step(compat_probs, hapl_probs)
+	# select the haplotype pair for each genotype that maximizes the probability
+	glen = len(compat_hapls)
+	for ii in range()
+	return
+
 
 def process_geno(genos):
 	if method == "EM":
