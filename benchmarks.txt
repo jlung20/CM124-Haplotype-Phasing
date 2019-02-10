@@ -1,0 +1,3 @@
+Commit 	Runtime on Ex1	Accuracy on Ex1
+2ab2aba		29:28			.8645
+9277f63     58:48           .8859
