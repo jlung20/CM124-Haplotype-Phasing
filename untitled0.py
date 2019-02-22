@@ -6,7 +6,7 @@ import math
 from itertools import product
 
 # current set of tuning parameters and global variables is below
-step = 20
+step = 15
 # options currently just include "EM" but will be extended later on
 method = "EM"
 outfile = ""
@@ -147,6 +147,39 @@ def m_step(compat_probs, hapl_probs):
 		hapl_probs[uhapl] = prob_dict[uhapl] / two_n
 	return
 
+def set_init_hapl_probs(hapl_set, hapl_probs, em_init):
+        if em_init == "rand":
+                print('hello')
+                ps = np.random.uniform(.0001, .9999, len(hapl_set))
+                ps /= np.sum(ps)
+                ii = 0
+                for hapl in hapl_set:
+                        hapl_probs[hapl] = ps[ii]
+                        ii += 1
+        # Change below line if we add more EM initialization methods
+        #if em_init == "unif":
+        else:
+                num_hapls = len(hapl_set)
+	        # intialize the probabilities for each unique haplotype
+	        for hapl in hapl_set:
+		        hapl_probs[hapl] = 1.0/num_hapls
+        return
+
+def q_metric(compat_probs, hapl_probs):
+        q_sum = 0.0
+	for hlist in compat_probs:
+		max_prob = hlist[0][1]
+		cur_pair = hlist[0][0]
+		cnt_pairs = len(hlist)
+		for ii in range(1, cnt_pairs):
+			pair_prob = hlist[ii][1]
+			if pair_prob > max_prob:
+				max_prob = pair_prob
+				cur_pair = hlist[ii][0]
+		q_sum += np.log(hapl_probs[cur_pair[0]])
+		q_sum += np.log(hapl_probs[cur_pair[1]])
+        return q_sum
+                        
 # function orchestrating the meat of the EM algorithm
 def process_EM(genos):
 	compat_hapls = gen_all_compatible(genos)
@@ -159,11 +192,17 @@ def process_EM(genos):
 			for hapl in hapl_tuple:
 				hapl_set.add(hapl)
 	hapl_probs = {}
-	num_hapls = len(hapl_set)
-	# intialize the probabilities for each unique haplotype
-	for hapl in hapl_set:
-		hapl_probs[hapl] = 1.0/num_hapls
-	compat_probs = []
+        #hapl_probs_0 = {}
+        set_init_hapl_probs(hapl_set, hapl_probs, "unif")
+        #set_init_hapl_probs(hapl_set, hapl_probs_0, "rand")
+        '''for h in hapl_probs:
+                print(hapl_probs[h])
+                break
+        for h in hapl_probs_0:
+                print(hapl_probs_0[h])
+                break'''
+        compat_probs = []
+        #compat_probs_0 = []
 	# initialize probabilities for each haplotype in C(g)
 	for hapl_list in compat_hapls:
 		aug_hapls = []
@@ -171,19 +210,31 @@ def process_EM(genos):
 		for hapl_tuple in hapl_list:
 			aug_hapls.append([hapl_tuple, 1/l_len])
 		compat_probs.append(aug_hapls)
+                #compat_probs_0.append(aug_hapls)
+        #e_step(compat_probs_0, hapl_probs_0)
+        #print(compat_probs_0[0])
+        #print(compat_probs[0])
 	#print(num_hapls)
 	# run the EM algorithm some number of times
-	for ii in range(10):
-		m_step(compat_probs, hapl_probs)
+	for ii in range(6):
+                '''q0 = q_metric(compat_probs, hapl_probs)
+                q1 = q_metric(compat_probs_0, hapl_probs_0)
+                print(q0)
+                print(q1)'''
+                m_step(compat_probs, hapl_probs)
 		e_step(compat_probs, hapl_probs)
-		jj = 0
-		'''print('---')
-		for h in hapl_probs:
-			print(hapl_probs[h])
-			jj += 1
-			if jj >= 10:
-				break'''
+                #m_step(compat_probs_0, hapl_probs_0)
+		#e_step(compat_probs_0, hapl_probs_0)
 	# select the haplotype pair for each genotype that maximizes the probability
+        # goodness metric: sum of log of hapl probs
+        #m_step(compat_probs, hapl_probs)
+        #m_step(compat_probs_0, hapl_probs_0)
+        #q0 = q_metric(compat_probs, hapl_probs)
+        #q1 = q_metric(compat_probs_0, hapl_probs_0)
+        #print(q0)
+        #print(q1)
+        #if q1 > q0:
+        #        compat_probs = compat_probs_0
 	inferred_hapls = []
 	for hlist in compat_probs:
 		max_prob = hlist[0][1]
@@ -196,15 +247,10 @@ def process_EM(genos):
 				cur_pair = hlist[ii][0]
 		inferred_hapls.append(cur_pair[0])
 		inferred_hapls.append(cur_pair[1])
-	#print(inferred_hapls)
-	#print(len(inferred_hapls))
-	#print(len(inferred_hapls[0]))
 	global end_bits
 	if len(end_bits) != 0:
 		check_for_parity(inferred_hapls)
 	h_t = reorient_genos(inferred_hapls)
-	num_hapls = len(inferred_hapls)
-	#print([inferred_hapls[ii][0] for ii in range(num_hapls)])
 	end_bits = h_t[-1]
 	print_haplotypes(h_t)
 	return
@@ -228,7 +274,6 @@ def main(fname):
 			input_mat.append(row) #[int(x) for x in row])
 	idx = 0
 	ilen = len(input_mat)
-
 	for ii in range(step, ilen, step):
 		# orig
 		#process_geno(reorient_genos(input_mat[ii - step:ii]))
@@ -239,8 +284,15 @@ def main(fname):
 			process_geno(reorient_genos(input_mat[ii - step:ii + 1]))
 		else:
 			process_geno(reorient_genos(input_mat[ii - step:ii]))
-	# need to finish off the remainder herejeff@peabody:/media/jeffjeff@peabody:/media/jeff/New Volume/CSCM124$ head -1000 example_data_1_sol_wip.tx/New Volume/CSCM124$ head -1000 example_data_1_sol_wip.tx
 	process_geno(reorient_genos(input_mat[idx:]))
+        '''for ii in range(step, 1000, step):
+                idx = ii
+                print(ii)
+                if ii + 1 < ilen:
+                        process_geno(reorient_genos(input_mat[ii - step:ii + 1]))
+		else:
+			process_geno(reorient_genos(input_mat[ii - step:ii]))
+	process_geno(reorient_genos(input_mat[idx:1001]))'''
 	print(len(input_mat))
 
 if __name__=="__main__":
