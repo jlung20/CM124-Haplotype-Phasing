@@ -3,7 +3,7 @@ import random
 import csv
 import sys
 import math
-from itertools import product
+import itertools
 
 outfile = ""
 
@@ -48,7 +48,7 @@ def split_l(l_graph_row, hapls_row):
 
 # combines all fields of two nodes
 def merge_two(n1, n2):
-	merged = [[n1[ii] + n2[ii]] for ii in range(2)]
+	merged = [n1[ii] + n2[ii] for ii in range(2)]
 	merged.append(n1[2] + n2[2])
 	merged.append(n1[3].union(n2[3]))
 	return merged
@@ -58,7 +58,8 @@ def merge_all(hapl_dict):
 	while len(hapl_dict) != 1:
 		indices = hapl_dict.keys()
 		hapl_dict[indices[0]] = merge_two(hapl_dict[indices[0]], hapl_dict[indices[1]])
-		hapl_dict.remove(indices[1])
+		del hapl_dict[indices[1]]
+		#hapl_dict.remove(indices[1])
 	return [hapl_dict[hapl_dict.keys()[0]]]
 
 # compute pairwise threshold
@@ -77,12 +78,91 @@ def min_thresh(hapl_dict):
 				min_t = t
 	return min_t
 
-def merge_score(l1, idx2, hapls, ii):
+# compute the merge score between a pair of nodes, n1 and n2, stopping 
+def merge_score(n1, n2, hapls, idx2, min_diff, hapl_len):
+	# compute the threshold. if ever exceeded, return 100.0 or something
+	max_diff = 0.0
+	thr_diff = thresh(n1, n2)
+	print(thr_diff)
+	o1 = float(len(n1[3]))
+	o2 = float(len(n2[3]))
+	# for every level before the end of hapls, check if the difference is
+	# too large: i.e. create a dictionary, which initially consists of a
+	# blank string. then, take the allele at the given index (and incr)
+	# and construct the next level. once all have been added to the next level,
+	# purge the ones that involve too few haplotypes to possibly reach the
+	# minimum threshold. at that same time, compare the difference and check
+	# if it exceeds the threshold. if it doesn't move to the next pair of
+	# haplotypes. terminate when all haplotypes have been exhausted. return
+	# the maximum observed difference over the courseo of this.
+	merge_dict_1 = {"": n1[3]}
+	merge_dict_2 = {"": n2[3]}
+	print('Before while loop')
+	while idx2 < hapl_len and (len(merge_dict_1) != 0 or len(merge_dict_2) != 0):
+		post_merge_1 = {}
+		post_merge_2 = {}
+		print('Construct next level')
+		# construct the next level
+		for h_str in merge_dict_1:
+			for ii in merge_dict_1[h_str]:
+				ch = hapls[idx2][ii]
+				new_str = h_str + ch
+				if new_str not in post_merge_1:
+					post_merge_1[new_str] = {ii}
+				else:
+					post_merge_1[new_str].add(ii)
+		for h_str in merge_dict_2:
+			for ii in merge_dict_2[h_str]:
+				ch = hapls[idx2][ii]
+				new_str = h_str + ch
+				if new_str not in post_merge_2:
+					post_merge_2[new_str] = {ii}
+				else:
+					post_merge_2[new_str].add(ii)
+		merge_dict_1 = post_merge_1
+		merge_dict_2 = post_merge_2
+		poss_hapls = set()
+		for h_str in merge_dict_1:
+			poss_hapls.add(h_str)
+		for h_str in merge_dict_2:
+			poss_hapls.add(h_str)
+		print('Possible haplotypes:')
+		print(poss_hapls)
+		# check each edge 
+		for h in poss_hapls:
+			h1_cnt = 0
+			h2_cnt = 0
+			if h in merge_dict_1:
+				h1_cnt = len(merge_dict_1[h])
+			if h in merge_dict_2:
+				h2_cnt = len(merge_dict_2[h])
+			# should also just compute the difference first and also check the
+			# below condition
+			print(o2)
+			print(h2_cnt)
+			c = [h1_cnt/o1, h2_cnt/o2]
+			print(c)
+			diff = abs(c[0] - c[1])
+			print(diff)
+			print('c and diff above')
+			if diff >= thr_diff:
+				return 100.0
+			if diff >= max_diff:
+				max_diff = diff
+			if max(c) <= min_diff:
+				if h in merge_dict_1:
+					del merge_dict_1[h]
+				if h in merge_dict_2:
+					del merge_dict_2[h]
+		idx2 += 1
+	return max_diff
+
 
 # attempts to merge nodes that contain similar information
 # idx: the next haplotype to look at. If no more, we can just merge all of them!
 def merge_l(l_row, hapls, idx):
 	l_len = len(l_row)
+	hapl_len = len(hapls)
 	# nothing to merge, so return
 	if l_len == 1:
 		return l_row
@@ -98,7 +178,24 @@ def merge_l(l_row, hapls, idx):
 	# compute merging score for each pair of nodes
 	# find min and if it is less than corresponding threshold, accept
 	# combine the two nodes and repeat the process until no satisfying pair
-	# convert back from dictionary to list (i.e. dict.values())
+	min_merge_score = 99.0
+	while min_merge_score < 100.0 and len(hapl_dict) > 1:
+		min_merge_score = 100.0
+		pairs = list(itertools.combinations(hapl_dict.keys(), 2))
+		print(pairs)
+		mpair = pairs[0]
+		for p in pairs:
+			sc = merge_score(hapl_dict[p[0]], hapl_dict[p[1]], hapls, idx, min_t, hapl_len)
+			if sc < min_merge_score:
+				min_merge_score = sc
+				mpair = p
+		print(min_merge_score)
+		print(mpair)
+		if min_merge_score < 100.0:
+			hapl_dict[mpair[0]] = merge_two(hapl_dict[mpair[0]], hapl_dict[mpair[1]])
+			del hapl_dict[mpair[1]]
+	# convert back from dictionary to list
+	return hapl_dict.values()
 
 # generates the localized haplotype cluster model
 def localized_hapl_cluster(hapls):
@@ -122,6 +219,9 @@ def localized_hapl_cluster(hapls):
 		#	print(ele)
 		# merge (combine nodes whose futures are sufficiently similar)
 		l_graph.append(merge_l(l_row, hapls, idx))
+		for ele in l_graph:
+			print(ele)
+		#sys.exit(-1)
 	# afterwards, just add a node that all of the previous label maps to
 	return l_graph
 
@@ -130,20 +230,21 @@ def main(fname):
 	print(fname)
 	global outfile
 	# CHANGE THIS LINE LATER!!! CURRENTLY TRYING TO AVOID OVERWRITING THE ACTUAL FILE
-	outfile = fname[:-4] + "_sol_wip.txt"
+	'''outfile = fname[:-4] + "_sol_wip.txt"
 	print(outfile)
 	input_mat = []
 	with(open(fname, 'rb')) as f:
 		reader = csv.reader(f, delimiter=' ')
 		for row in reader:
-			input_mat.append(row)
+			input_mat.append(row)'''
 	# for each genotype, randomly generate some number (currently 10) compatible haplotypes
-	hapls = rand_compat_hapls(input_mat, 10)
+	hapls = rand_compat_hapls(input_mat, 1) #10)
 	local_graph = []
 	dipl_hmm = []
 	print('Constructed random haplotypes')
 	for ii in range(10):
 		local_graph = localized_hapl_cluster(hapls)
+		sys.exit(-1)
 		# dipl_hmm = construct_dipl(local_graph)
 		# hapls = generate_new_samples(dipl_hmm, input_mat)
 		print('Completed iteration {}'.format(ii))
