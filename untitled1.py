@@ -83,7 +83,7 @@ def merge_score(n1, n2, hapls, idx2, min_diff, hapl_len):
 	# compute the threshold. if ever exceeded, return 100.0 or something
 	max_diff = 0.0
 	thr_diff = thresh(n1, n2)
-	print(thr_diff)
+	#print(thr_diff)
 	o1 = float(len(n1[3]))
 	o2 = float(len(n2[3]))
 	# for every level before the end of hapls, check if the difference is
@@ -97,11 +97,11 @@ def merge_score(n1, n2, hapls, idx2, min_diff, hapl_len):
 	# the maximum observed difference over the courseo of this.
 	merge_dict_1 = {"": n1[3]}
 	merge_dict_2 = {"": n2[3]}
-	print('Before while loop')
+	#print('Before while loop')
 	while idx2 < hapl_len and (len(merge_dict_1) != 0 or len(merge_dict_2) != 0):
 		post_merge_1 = {}
 		post_merge_2 = {}
-		print('Construct next level')
+		#print('Construct next level')
 		# construct the next level
 		for h_str in merge_dict_1:
 			for ii in merge_dict_1[h_str]:
@@ -126,8 +126,8 @@ def merge_score(n1, n2, hapls, idx2, min_diff, hapl_len):
 			poss_hapls.add(h_str)
 		for h_str in merge_dict_2:
 			poss_hapls.add(h_str)
-		print('Possible haplotypes:')
-		print(poss_hapls)
+		'''print('Possible haplotypes:')
+		print(poss_hapls)'''
 		# check each edge 
 		for h in poss_hapls:
 			h1_cnt = 0
@@ -138,13 +138,13 @@ def merge_score(n1, n2, hapls, idx2, min_diff, hapl_len):
 				h2_cnt = len(merge_dict_2[h])
 			# should also just compute the difference first and also check the
 			# below condition
-			print(o2)
-			print(h2_cnt)
+			'''print(o2)
+			print(h2_cnt)'''
 			c = [h1_cnt/o1, h2_cnt/o2]
-			print(c)
+			#print(c)
 			diff = abs(c[0] - c[1])
-			print(diff)
-			print('c and diff above')
+			#print(diff)
+			#print('c and diff above')
 			if diff >= thr_diff:
 				return 100.0
 			if diff >= max_diff:
@@ -182,15 +182,15 @@ def merge_l(l_row, hapls, idx):
 	while min_merge_score < 100.0 and len(hapl_dict) > 1:
 		min_merge_score = 100.0
 		pairs = list(itertools.combinations(hapl_dict.keys(), 2))
-		print(pairs)
+		#print(pairs)
 		mpair = pairs[0]
 		for p in pairs:
 			sc = merge_score(hapl_dict[p[0]], hapl_dict[p[1]], hapls, idx, min_t, hapl_len)
 			if sc < min_merge_score:
 				min_merge_score = sc
 				mpair = p
-		print(min_merge_score)
-		print(mpair)
+		'''print(min_merge_score)
+		print(mpair)'''
 		if min_merge_score < 100.0:
 			hapl_dict[mpair[0]] = merge_two(hapl_dict[mpair[0]], hapl_dict[mpair[1]])
 			del hapl_dict[mpair[1]]
@@ -219,8 +219,9 @@ def localized_hapl_cluster(hapls):
 		#	print(ele)
 		# merge (combine nodes whose futures are sufficiently similar)
 		l_graph.append(merge_l(l_row, hapls, idx))
-		for ele in l_graph:
+		'''for ele in l_graph:
 			print(ele)
+			print(len(ele))'''
 		#sys.exit(-1)
 	# afterwards, just add a node that all of the previous label maps to
 	return l_graph
@@ -230,13 +231,13 @@ def main(fname):
 	print(fname)
 	global outfile
 	# CHANGE THIS LINE LATER!!! CURRENTLY TRYING TO AVOID OVERWRITING THE ACTUAL FILE
-	'''outfile = fname[:-4] + "_sol_wip.txt"
+	outfile = fname[:-4] + "_sol_wip.txt"
 	print(outfile)
 	input_mat = []
 	with(open(fname, 'rb')) as f:
 		reader = csv.reader(f, delimiter=' ')
 		for row in reader:
-			input_mat.append(row)'''
+			input_mat.append(row)
 	# for each genotype, randomly generate some number (currently 10) compatible haplotypes
 	hapls = rand_compat_hapls(input_mat, 1) #10)
 	local_graph = []
@@ -247,6 +248,7 @@ def main(fname):
 		sys.exit(-1)
 		# dipl_hmm = construct_dipl(local_graph)
 		# hapls = generate_new_samples(dipl_hmm, input_mat)
+		# remember to reverse the order with every other iteration
 		print('Completed iteration {}'.format(ii))
 	print('Running Viterbi algorithm on final HMM')
 	#hapls = dipl_viterbi(dipl_hmm, input_mat)
