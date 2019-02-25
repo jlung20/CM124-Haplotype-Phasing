@@ -4,6 +4,7 @@ import csv
 import sys
 import math
 import itertools
+from collections import defaultdict
 
 outfile = ""
 
@@ -226,6 +227,42 @@ def localized_hapl_cluster(hapls):
 	# afterwards, just add a node that all of the previous label maps to
 	return l_graph
 
+# so first construct a haplotype HMM and then see if a diployupe one is necessary
+def construct_dipl(local_graph):
+    l_len = len(local_graph)
+    tot = 0
+    r1 = 0
+    pis = []
+    transitions = []
+    t_prev_map = []
+    lnodes = len(local_graph[1])
+    for ii in range(lnodes):
+        incoming = len(local_graph[1][ii][0])
+        for jj in range(incoming):
+            ecnt = local_graph[1][ii][2][jj]
+            pis.append(float(ecnt))
+    pis /= sum(pis)
+    for ii in range(2, l_len):
+        rlen = len(local_graph[ii])
+        emap = {}
+        edges = defaultdict(list)
+        for jj in range(rlen):
+            incoming = len(local_graph[ii][jj][0])
+            for kk in range(incoming):
+                prev_node = local_graph[ii][jj][0][kk]
+                sym = local_graph[ii][jj][1][kk]
+                ecnt = local_graph[ii][jj][2][kk]
+                emap[(prev_node, jj, sym)] = float(ecnt)
+                edges[prev_node].append(prev_node, jj, sym)
+        t_prev_map.append(edges)
+        for e in edges:
+            outgoing = len(edges[e])
+            tsum = sum([emap[edges[e][ii]] for ii in range(outgoing)])
+            for ii in range(outgoing):
+                emap[edges[e][ii]] /= tsum
+        transitions.append(emap)
+    return pis, transitions, t_prev_map
+
 # also have function to sample the haplotypes
 def main(fname):
 	print(fname)
@@ -245,8 +282,10 @@ def main(fname):
 	print('Constructed random haplotypes')
 	for ii in range(10):
 		local_graph = localized_hapl_cluster(hapls)
+		# I'm thinking I might be able to get away with just constructing a hapl_hmm
+		# and then just keep track of pairs?
+		dipl_hmm = construct_dipl(local_graph)
 		sys.exit(-1)
-		# dipl_hmm = construct_dipl(local_graph)
 		# hapls = generate_new_samples(dipl_hmm, input_mat)
 		# remember to reverse the order with every other iteration
 		print('Completed iteration {}'.format(ii))
