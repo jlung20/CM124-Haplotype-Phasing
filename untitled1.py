@@ -98,8 +98,11 @@ def merge_score(n1, n2, hapls, idx2, min_diff, hapl_len):
 	# the maximum observed difference over the courseo of this.
 	merge_dict_1 = {"": n1[3]}
 	merge_dict_2 = {"": n2[3]}
+	# windowing hyperparameter
+	depth = 0
 	#print('Before while loop')
-	while idx2 < hapl_len and (len(merge_dict_1) != 0 or len(merge_dict_2) != 0):
+	while idx2 < hapl_len and (len(merge_dict_1) != 0 or len(merge_dict_2) != 0) and depth < 50:
+		depth += 1
 		post_merge_1 = {}
 		post_merge_2 = {}
 		#print('Construct next level')
@@ -176,6 +179,7 @@ def merge_l(l_row, hapls, idx):
 		return merge_all(hapl_dict)
 	# compute minimum threshold
 	min_t = min_thresh(hapl_dict)
+	pmap = {}
 	# compute merging score for each pair of nodes
 	# find min and if it is less than corresponding threshold, accept
 	# combine the two nodes and repeat the process until no satisfying pair
@@ -186,7 +190,13 @@ def merge_l(l_row, hapls, idx):
 		#print(pairs)
 		mpair = pairs[0]
 		for p in pairs:
-			sc = merge_score(hapl_dict[p[0]], hapl_dict[p[1]], hapls, idx, min_t, hapl_len)
+			# no need to recalculate for pairs that didn't change (i.e. if both are unchanged)
+			sc = 100.0
+			if p in pmap and pmap[p][0] == 0:
+				sc = pmap[p][1]
+			else:
+				sc = merge_score(hapl_dict[p[0]], hapl_dict[p[1]], hapls, idx, min_t, hapl_len)
+				pmap[p] = [0, sc]
 			if sc < min_merge_score:
 				min_merge_score = sc
 				mpair = p
@@ -195,6 +205,10 @@ def merge_l(l_row, hapls, idx):
 		if min_merge_score < 100.0:
 			hapl_dict[mpair[0]] = merge_two(hapl_dict[mpair[0]], hapl_dict[mpair[1]])
 			del hapl_dict[mpair[1]]
+			pmap[mpair] = [-1, 100.0]
+			for p in pmap:
+				if p[0] == mpair[0] or p[0] == mpair[1] or p[1] == mpair[0] or p[1] == mpair[1]:
+					pmap[p] = [-1, 100.0]
 	# convert back from dictionary to list
 	return hapl_dict.values()
 
@@ -212,6 +226,7 @@ def localized_hapl_cluster(hapls):
 		index_set.add(ii)
 	l_graph.append([[[-1], ['-1'], [], index_set]])
 	for ii in range(hlen):
+		print(ii)
 		# use idx rather than ii because l_graph has one level before 1st iter
 		idx = ii + 1
 		# split (i.e., create next level)
@@ -219,7 +234,9 @@ def localized_hapl_cluster(hapls):
 		#for ele in l_graph:
 		#	print(ele)
 		# merge (combine nodes whose futures are sufficiently similar)
-		l_graph.append(merge_l(l_row, hapls, idx))
+		rows = merge_l(l_row, hapls, idx)
+		print(len(rows))
+		l_graph.append(rows)
 		'''for ele in l_graph:
 			print(ele)
 			print(len(ele))'''
@@ -227,7 +244,7 @@ def localized_hapl_cluster(hapls):
 	# afterwards, just add a node that all of the previous label maps to
 	return l_graph
 
-# so first construct a haplotype HMM and then see if a diployupe one is necessary
+# so first construct a haplotype HMM and then see if a diplotype one is necessary
 def construct_dipl(local_graph):
     l_len = len(local_graph)
     tot = 0
@@ -241,7 +258,8 @@ def construct_dipl(local_graph):
         for jj in range(incoming):
             ecnt = local_graph[1][ii][2][jj]
             pis.append(float(ecnt))
-    pis /= sum(pis)
+    sump = sum(pis)
+    pis = [pis[0]/sump, pis[1]/sump]
     for ii in range(2, l_len):
         rlen = len(local_graph[ii])
         emap = {}
@@ -253,7 +271,7 @@ def construct_dipl(local_graph):
                 sym = local_graph[ii][jj][1][kk]
                 ecnt = local_graph[ii][jj][2][kk]
                 emap[(prev_node, jj, sym)] = float(ecnt)
-                edges[prev_node].append(prev_node, jj, sym)
+                edges[prev_node].append((prev_node, jj, sym))
         t_prev_map.append(edges)
         for e in edges:
             outgoing = len(edges[e])
@@ -276,21 +294,30 @@ def main(fname):
 		for row in reader:
 			input_mat.append(row)
 	# for each genotype, randomly generate some number (currently 10) compatible haplotypes
-	hapls = rand_compat_hapls(input_mat, 1) #10)
+	hapls = rand_compat_hapls(input_mat, 5) #10)
 	local_graph = []
-	dipl_hmm = []
+	hapl_hmm = []
 	print('Constructed random haplotypes')
 	for ii in range(10):
 		local_graph = localized_hapl_cluster(hapls)
+		lens = []
+		for ele in local_graph:
+			lens.append(len(ele))
+		print(lens)
+		'''print('-------')
+		print(len(local_graph))'''
 		# I'm thinking I might be able to get away with just constructing a hapl_hmm
 		# and then just keep track of pairs?
-		dipl_hmm = construct_dipl(local_graph)
+		pis, hapl_hmm, t_prev = construct_dipl(local_graph)
+		'''for row in hapl_hmm:
+			print(row)
+		print(len(hapl_hmm))'''
 		sys.exit(-1)
 		# hapls = generate_new_samples(dipl_hmm, input_mat)
 		# remember to reverse the order with every other iteration
 		print('Completed iteration {}'.format(ii))
 	print('Running Viterbi algorithm on final HMM')
-	#hapls = dipl_viterbi(dipl_hmm, input_mat)
+	#hapls = dipl_viterbi(hapl_hmm, input_mat)
 	#then, print hapls
 	#process_geno(reorient_genos(input_mat[idx:]))
 
