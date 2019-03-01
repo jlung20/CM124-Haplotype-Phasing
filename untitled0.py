@@ -29,8 +29,8 @@ def print_haplotypes(h_t):
 	with(open(outfile, "a+")) as f:
 		rlen = len(h_t[0])
 		row_cnt = len(h_t)
-		if row_cnt == step + 1:
-			row_cnt = step
+		#if row_cnt == step + 1:
+		#	row_cnt = step
 		for jj in range(row_cnt): #row in h_t:
 			for ii in range(rlen - 1):
 				f.write(h_t[jj][ii] + ' ')
@@ -217,15 +217,16 @@ def process_EM(genos):
 	#print(num_hapls)
 	# run the EM algorithm some number of times
 	for ii in range(6):
-                '''q0 = q_metric(compat_probs, hapl_probs)
-                q1 = q_metric(compat_probs_0, hapl_probs_0)
-                print(q0)
-                print(q1)'''
-                m_step(compat_probs, hapl_probs)
+		m_step(compat_probs, hapl_probs)
 		e_step(compat_probs, hapl_probs)
-                #m_step(compat_probs_0, hapl_probs_0)
+  		'''q0 = q_metric(compat_probs, hapl_probs)
+        q1 = q_metric(compat_probs_0, hapl_probs_0)
+        print(q0)
+        print(q1)'''
+        
+        #m_step(compat_probs_0, hapl_probs_0)
 		#e_step(compat_probs_0, hapl_probs_0)
-	# select the haplotype pair for each genotype that maximizes the probability
+		# select the haplotype pair for each genotype that maximizes the probability
         # goodness metric: sum of log of hapl probs
         #m_step(compat_probs, hapl_probs)
         #m_step(compat_probs_0, hapl_probs_0)
@@ -251,8 +252,13 @@ def process_EM(genos):
 	if len(end_bits) != 0:
 		check_for_parity(inferred_hapls)
 	h_t = reorient_genos(inferred_hapls)
-	end_bits = h_t[-1]
+	'''if len(end_bits) == 0:
+		print_haplotypes(h_t)
+	else:
+		print_haplotypes(h_t[1:])'''
 	print_haplotypes(h_t)
+	end_bits = h_t[-1]
+	#print_haplotypes(h_t)
 	return
 
 
@@ -274,7 +280,26 @@ def main(fname):
 			input_mat.append(row) #[int(x) for x in row])
 	idx = 0
 	ilen = len(input_mat)
-	for ii in range(step, ilen, step):
+	row_len = len(input_mat[0])
+	num_hetero = [0 for x in range(row_len)]
+	hetero_hyper = 12
+	for ii in range(ilen):
+		max_h = num_hetero[0]
+		for jj in range(row_len):
+			if input_mat[ii][jj] == '1':
+				nh = num_hetero[jj] + 1
+				num_hetero[jj] = nh
+				if nh > max_h:
+					max_h = nh
+		if max_h >= hetero_hyper:
+			process_geno(reorient_genos(input_mat[idx : ii]))
+			idx = ii
+			num_hetero = [0 for x in range(row_len)]
+			print(ii)
+		elif ii == ilen - 1:
+			process_geno(reorient_genos(input_mat[idx:]))
+			print(ii)
+	'''for ii in range(step, ilen, step):
 		# orig
 		#process_geno(reorient_genos(input_mat[ii - step:ii]))
 		idx = ii
@@ -284,7 +309,7 @@ def main(fname):
 			process_geno(reorient_genos(input_mat[ii - step:ii + 1]))
 		else:
 			process_geno(reorient_genos(input_mat[ii - step:ii]))
-	process_geno(reorient_genos(input_mat[idx:]))
+	process_geno(reorient_genos(input_mat[idx:]))'''
         '''for ii in range(step, 1000, step):
                 idx = ii
                 print(ii)
