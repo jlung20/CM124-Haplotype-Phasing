@@ -6,6 +6,7 @@ import math
 import itertools
 from collections import defaultdict
 
+dups = 3
 outfile = ""
 
 # return the transposed matrix
@@ -98,7 +99,7 @@ def merge_score(n1, n2, hapls, idx2, min_diff, hapl_len):
 	# the maximum observed difference over the courseo of this.
 	merge_dict_1 = {"": n1[3]}
 	merge_dict_2 = {"": n2[3]}
-	# windowing hyperparameter
+	# windowing hyperparameter: this might really be a mistake. check later.
 	depth = 0
 	#print('Before while loop')
 	while idx2 < hapl_len and (len(merge_dict_1) != 0 or len(merge_dict_2) != 0) and depth < 50:
@@ -226,7 +227,8 @@ def localized_hapl_cluster(hapls):
 		index_set.add(ii)
 	l_graph.append([[[-1], ['-1'], [], index_set]])
 	for ii in range(hlen):
-		print(ii)
+		if ii % 100 == 0:
+			print(ii)
 		# use idx rather than ii because l_graph has one level before 1st iter
 		idx = ii + 1
 		# split (i.e., create next level)
@@ -281,6 +283,20 @@ def construct_dipl(local_graph):
         transitions.append(emap)
     return pis, transitions, t_prev_map
 
+# generates new phased haplotypes given the haplotype hmm and the input matrix
+def generate_new_samples(hapl_hmm, pis, t_prev, input_mat):
+	# construct pairs first and then split them up to match the format
+	hlen = len(hapl_hmm)
+	ilen = len(input_mat[0])
+	# initialize based on the pis and compatibility
+	# then, randomly choose the next state based on the probability of the
+	# transition (which incorporates both the haplotypes)
+	# map pairs of current vertices to next vertices (that satisfy genotype)
+	# (cur_0, cur_1, next_geno) -> [[next_0, next_1, t_prob]
+	poss_next_probs = {}
+	for ii in 
+	for ii in range()
+
 # also have function to sample the haplotypes
 def main(fname):
 	print(fname)
@@ -294,16 +310,16 @@ def main(fname):
 		for row in reader:
 			input_mat.append(row)
 	# for each genotype, randomly generate some number (currently 10) compatible haplotypes
-	hapls = rand_compat_hapls(input_mat, 5) #10)
+	hapls = rand_compat_hapls(input_mat, dups) #10)
 	local_graph = []
 	hapl_hmm = []
 	print('Constructed random haplotypes')
 	for ii in range(10):
 		local_graph = localized_hapl_cluster(hapls)
-		lens = []
-		for ele in local_graph:
-			lens.append(len(ele))
-		print(lens)
+		#lens = []
+		#for ele in local_graph:
+		#	lens.append(len(ele))
+		#print(lens)
 		'''print('-------')
 		print(len(local_graph))'''
 		# I'm thinking I might be able to get away with just constructing a hapl_hmm
@@ -313,7 +329,7 @@ def main(fname):
 			print(row)
 		print(len(hapl_hmm))'''
 		sys.exit(-1)
-		# hapls = generate_new_samples(dipl_hmm, input_mat)
+		# hapls = generate_new_samples(hapl_hmm, pis, t_prev, input_mat)
 		# remember to reverse the order with every other iteration
 		print('Completed iteration {}'.format(ii))
 	print('Running Viterbi algorithm on final HMM')
