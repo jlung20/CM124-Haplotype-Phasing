@@ -31,12 +31,15 @@ def print_haplotypes(h_t):
 		row_cnt = len(h_t)
 		#if row_cnt == step + 1:
 		#	row_cnt = step
-		for jj in range(row_cnt): #row in h_t:
+		'''for jj in range(row_cnt):
 			for ii in range(rlen - 1):
 				f.write(h_t[jj][ii] + ' ')
-			f.write(h_t[jj][rlen - 1] + '\n')
-			'''f.write(row[ii] + ' ')
-			f.write(row[rlen - 1] + '\n')'''
+			f.write(h_t[jj][rlen - 1] + '\n')'''
+		for row in h_t:
+			for ii in range(rlen - 1):
+				f.write(row[ii] + ' ')
+			f.write(row[rlen - 1] + '\n')
+
 		'''
 		hapl_len = len(hapl[0])
 		num_hapls = len(hapl)
@@ -282,8 +285,12 @@ def main(fname):
 	ilen = len(input_mat)
 	row_len = len(input_mat[0])
 	num_hetero = [0 for x in range(row_len)]
-	hetero_hyper = 12
+	hetero_hyper = 16
+	skip_next = False
 	for ii in range(ilen):
+		if skip_next:
+			skip_next = False
+			continue
 		max_h = num_hetero[0]
 		for jj in range(row_len):
 			if input_mat[ii][jj] == '1':
@@ -292,8 +299,9 @@ def main(fname):
 				if nh > max_h:
 					max_h = nh
 		if max_h >= hetero_hyper:
-			process_geno(reorient_genos(input_mat[idx : ii]))
-			idx = ii
+			process_geno(reorient_genos(input_mat[idx : ii + 1]))
+			skip_next = True
+			idx = ii + 1
 			num_hetero = [0 for x in range(row_len)]
 			print(ii)
 		elif ii == ilen - 1:

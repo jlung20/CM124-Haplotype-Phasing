@@ -20,11 +20,12 @@ def rand_row(input_row, repeat_cnt):
 	r_row = []
 	for allele in input_row:
 		if allele == '1':
-			r_row += ['0' if ch == 0 else '1' for ch in np.random.binomial(1, 0.5, repeat_cnt)]
+			trow = [['0', '1'] if ch == 0 else ['1', '0'] for ch in np.random.binomial(1, 0.5, repeat_cnt)]
+			r_row += list(itertools.chain.from_iterable(trow))
 		elif allele == '0':
-			r_row += ['0' for ii in range(repeat_cnt)]
+			r_row += ['0' for ii in range(2 * repeat_cnt)]
 		else:
-			r_row += ['1' for ii in range(repeat_cnt)]
+			r_row += ['1' for ii in range(2 * repeat_cnt)]
 	return r_row
 
 def rand_compat_hapls(input_mat, repeat_cnt):
@@ -252,6 +253,7 @@ def construct_dipl(local_graph):
     tot = 0
     r1 = 0
     pis = []
+    psym = []
     transitions = []
     t_prev_map = []
     lnodes = len(local_graph[1])
@@ -260,6 +262,8 @@ def construct_dipl(local_graph):
         for jj in range(incoming):
             ecnt = local_graph[1][ii][2][jj]
             pis.append(float(ecnt))
+            # store pair of node index and symbol
+            psym.append((jj, local_graph[1][ii][1][jj]))
     sump = sum(pis)
     pis = [pis[0]/sump, pis[1]/sump]
     for ii in range(2, l_len):
@@ -274,6 +278,8 @@ def construct_dipl(local_graph):
                 ecnt = local_graph[ii][jj][2][kk]
                 emap[(prev_node, jj, sym)] = float(ecnt)
                 edges[prev_node].append((prev_node, jj, sym))
+        #print(local_graph[ii])
+        #print(edges)
         t_prev_map.append(edges)
         for e in edges:
             outgoing = len(edges[e])
@@ -281,10 +287,29 @@ def construct_dipl(local_graph):
             for ii in range(outgoing):
                 emap[edges[e][ii]] /= tsum
         transitions.append(emap)
-    return pis, transitions, t_prev_map
+    return pis, transitions, t_prev_map, psym
+
+# returns next_node
+def find_next(cur_node, sym, t_prev_row):
+	clen = len(t_prev_row[cur_node])
+	for ii in range(clen):
+		if t_prev_row[cur_node][ii][2] == sym:
+			return t_prev_row[cur_node][ii][1]
+	#print('Failed to find matching next node')
+	#sys.exit(-1)
+	return -1
+
+# returns (prob, next_node)
+def find_next_with_prob(cur_node, sym, t_prev_row, hapl_hmm_row):
+	clen = len(t_prev_row[cur_node])
+	for ii in range(clen):
+		if t_prev_row[cur_node][ii][2] == sym:
+			prob = hapl_hmm_row[t_prev_row[cur_node][ii]]
+			return prob, t_prev_row[cur_node][ii][1]
+	return 0, -1
 
 # generates new phased haplotypes given the haplotype hmm and the input matrix
-def generate_new_samples(hapl_hmm, pis, t_prev, input_mat):
+def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 	# construct pairs first and then split them up to match the format
 	hlen = len(hapl_hmm)
 	ilen = len(input_mat[0])
@@ -294,8 +319,150 @@ def generate_new_samples(hapl_hmm, pis, t_prev, input_mat):
 	# map pairs of current vertices to next vertices (that satisfy genotype)
 	# (cur_0, cur_1, next_geno) -> [[next_0, next_1, t_prob]
 	poss_next_probs = {}
-	for ii in 
-	for ii in range()
+	next_hapls = []
+	thapls = []
+	node_list = []
+	indices = [0, 1]
+	# determine the start indices corresponding to the '1' and '0'
+	plen = len(psym)
+	for ii in range(plen):
+		if psym[ii][1] == '0':
+			indices[0] = ii
+		else:
+			indices[1] = ii
+	print(indices)
+	# choose the first positions
+	for jj in range(ilen):
+		if input_mat[0][jj] == '2':
+			for qq in range(dups):
+				for lolz in range(2):
+					thapls.append('1')
+					node_list.append(indices[1])
+		elif input_mat[0][jj] == '0':
+			for qq in range(dups):
+				for lolz in range(2):
+					thapls.append('0')
+					node_list.append(indices[0])
+		else:
+			hsyms = np.random.binomial(1, pis[indices[1]], dups)
+			print(hsyms)
+			for qq in range(dups):
+				if hsyms[qq] == 1:
+					thapls.append('1')
+					thapls.append('0')
+					node_list.append(indices[1])
+					node_list.append(indices[0])
+				else:
+					thapls.append('0')
+					thapls.append('1')
+					node_list.append(indices[0])
+					node_list.append(indices[1])
+	next_hapls.append(thapls)
+	print(len(node_list))
+	#print(next_hapls)
+	#print(len(next_hapls[0]))
+	#sys.exit(-1)
+	# for each following position, randomly sample a pair of compatible haplotypes
+	for ii in range(hlen):
+		thapls = []
+		next_nodes = []
+		t_prev_row = t_prev[ii]
+		hapl_row = hapl_hmm[ii]
+		# add a data structure to keep track of (cur_0, cur_1. next_sym_0, next_sym_1)
+		# map to (tprob, next_0, next_1). perform lookup. if found, we chilling. o/w
+		# calculate and add to the data structure.
+		# or maybe just calculate all of them before and then perform lookup 
+		# as needed.
+		dipls = {}
+		nl_idx = 0
+		print(ii)
+		print(len(node_list))
+		for jj in range(ilen):
+			#print(jj)
+			if input_mat[ii + 1][jj] == '2':
+				for qq in range(dups):
+					# need to add logic to figure out the next location and what's
+					# compatible; should maybe add some sort of data structure to
+					# store this information to reduce likelihood of re-searching
+					for lolz in range(2):
+						thapls.append('1')
+						nn = find_next(node_list[nl_idx], '1', t_prev_row)
+						if nn == -1:
+							print('Problem 2')
+							for ele in hapl_row.keys():
+								if ele[2] == '1':
+									next_nodes.append(ele[1])
+									break
+						else:
+							next_nodes.append(nn)
+						nl_idx += 1
+			elif input_mat[ii + 1][jj] == '0':
+				for qq in range(dups):
+					for lolz in range(2):
+						thapls.append('0')
+						nn = find_next(node_list[nl_idx], '0', t_prev_row)
+						if nn == -1:
+							print('Problem 0')
+							for ele in hapl_row.keys():
+								if ele[2] == '0':
+									next_nodes.append(ele[1])
+									break
+						else:
+							next_nodes.append(nn)
+						nl_idx += 1
+			else:
+				for qq in range(dups):
+					#print(nl_idx)
+					#print(len(next_nodes))
+					zero_zero, n00 = find_next_with_prob(node_list[nl_idx], '0', t_prev_row, hapl_row)
+					zero_one, n01 = find_next_with_prob(node_list[nl_idx], '1', t_prev_row, hapl_row)
+					one_zero, n10 = find_next_with_prob(node_list[nl_idx + 1], '0', t_prev_row, hapl_row)
+					one_one, n11 = find_next_with_prob(node_list[nl_idx + 1], '1', t_prev_row, hapl_row)
+					first = zero_one * one_zero
+					second = zero_zero * one_one
+					# if this happens, randomly move over to some valid pair of nodes
+					# not a great solution, but we'll see if it does at least ok...
+					if first == 0.0 and second == 0.0:
+						print('Problem 1')
+						'''print(node_list[nl_idx])
+						print(node_list[nl_idx + 1])
+						print(t_prev_row)
+						print(hapl_row)
+						print(next_hapls)'''
+						zero_unsat = True
+						one_unsat = True
+						for ele in hapl_row.keys():
+							if ele[2] == '0':
+								if zero_unsat:
+									next_nodes.append(ele[1])
+									thapls.append('0')
+									zero_unsat = False
+							elif one_unsat:
+								next_nodes.append(ele[1])
+								thapls.append('1')
+								one_unsat = False
+							if not zero_unsat and not one_unsat:
+								break
+						nl_idx += 2
+						#sys.exit(-1)
+					else:
+						one_z_prob = first / (first + second)
+						hsym = np.random.binomial(1, one_z_prob, 1)
+						if hsym == 1:
+							thapls.append('1')
+							thapls.append('0')
+							next_nodes.append(n01)
+							next_nodes.append(n10)
+						else:
+							thapls.append('0')
+							thapls.append('1')
+							next_nodes.append(n00)
+							next_nodes.append(n11)
+						nl_idx += 2
+		next_hapls.append(thapls)
+		node_list = next_nodes
+	#print(next_hapls)
+	return next_hapls
 
 # also have function to sample the haplotypes
 def main(fname):
@@ -316,6 +483,7 @@ def main(fname):
 	print('Constructed random haplotypes')
 	for ii in range(10):
 		local_graph = localized_hapl_cluster(hapls)
+		print(local_graph)
 		#lens = []
 		#for ele in local_graph:
 		#	lens.append(len(ele))
@@ -324,14 +492,29 @@ def main(fname):
 		print(len(local_graph))'''
 		# I'm thinking I might be able to get away with just constructing a hapl_hmm
 		# and then just keep track of pairs?
-		pis, hapl_hmm, t_prev = construct_dipl(local_graph)
+		pis, hapl_hmm, t_prev, psym = construct_dipl(local_graph)
+		print(pis)
+		print(hapl_hmm)
+		print(t_prev)
+		print(len(t_prev))
+		print(len(hapl_hmm))
+		print(psym)
 		'''for row in hapl_hmm:
 			print(row)
 		print(len(hapl_hmm))'''
-		sys.exit(-1)
-		# hapls = generate_new_samples(hapl_hmm, pis, t_prev, input_mat)
+		#sys.exit(-1)
+		hapls = generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat)
+		hapls.reverse()
+		input_mat.reverse()
+		print(len(hapls))
+		print(len(hapls[0]))
 		# remember to reverse the order with every other iteration
 		print('Completed iteration {}'.format(ii))
+	local_graph = localized_hapl_cluster(hapls)
+	print(local_graph)
+	pis, hapl_hmm, t_prev, psym = construct_dipl(local_graph)
+	for row in hapl_hmm:
+		print(len(row))
 	print('Running Viterbi algorithm on final HMM')
 	#hapls = dipl_viterbi(hapl_hmm, input_mat)
 	#then, print hapls
