@@ -238,7 +238,7 @@ def localized_hapl_cluster(hapls):
 		#	print(ele)
 		# merge (combine nodes whose futures are sufficiently similar)
 		rows = merge_l(l_row, hapls, idx)
-		print(len(rows))
+		#print(len(rows))
 		l_graph.append(rows)
 		'''for ele in l_graph:
 			print(ele)
@@ -318,7 +318,7 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 	# transition (which incorporates both the haplotypes)
 	# map pairs of current vertices to next vertices (that satisfy genotype)
 	# (cur_0, cur_1, next_geno) -> [[next_0, next_1, t_prob]
-	poss_next_probs = {}
+	#poss_next_probs = {}
 	next_hapls = []
 	thapls = []
 	node_list = []
@@ -330,7 +330,7 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 			indices[0] = ii
 		else:
 			indices[1] = ii
-	print(indices)
+	#print(indices)
 	# choose the first positions
 	for jj in range(ilen):
 		if input_mat[0][jj] == '2':
@@ -345,7 +345,7 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 					node_list.append(indices[0])
 		else:
 			hsyms = np.random.binomial(1, pis[indices[1]], dups)
-			print(hsyms)
+			#print(hsyms)
 			for qq in range(dups):
 				if hsyms[qq] == 1:
 					thapls.append('1')
@@ -358,7 +358,7 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 					node_list.append(indices[0])
 					node_list.append(indices[1])
 	next_hapls.append(thapls)
-	print(len(node_list))
+	#print(len(node_list))
 	#print(next_hapls)
 	#print(len(next_hapls[0]))
 	#sys.exit(-1)
@@ -375,8 +375,8 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 		# as needed.
 		dipls = {}
 		nl_idx = 0
-		print(ii)
-		print(len(node_list))
+		#print(ii)
+		#print(len(node_list))
 		for jj in range(ilen):
 			#print(jj)
 			if input_mat[ii + 1][jj] == '2':
@@ -388,7 +388,7 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 						thapls.append('1')
 						nn = find_next(node_list[nl_idx], '1', t_prev_row)
 						if nn == -1:
-							print('Problem 2')
+							#print('Problem 2')
 							for ele in hapl_row.keys():
 								if ele[2] == '1':
 									next_nodes.append(ele[1])
@@ -402,7 +402,7 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 						thapls.append('0')
 						nn = find_next(node_list[nl_idx], '0', t_prev_row)
 						if nn == -1:
-							print('Problem 0')
+							#print('Problem 0')
 							for ele in hapl_row.keys():
 								if ele[2] == '0':
 									next_nodes.append(ele[1])
@@ -423,7 +423,7 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 					# if this happens, randomly move over to some valid pair of nodes
 					# not a great solution, but we'll see if it does at least ok...
 					if first == 0.0 and second == 0.0:
-						print('Problem 1')
+						#print('Problem 1')
 						'''print(node_list[nl_idx])
 						print(node_list[nl_idx + 1])
 						print(t_prev_row)
@@ -464,6 +464,68 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 	#print(next_hapls)
 	return next_hapls
 
+# computes the most likely haplotypes for each individual, conditional on 
+# the HMM and genotype
+def dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat):
+	input_t = reorient_genos(input_mat)
+	glen = len(input_t)
+	hlen = len(hapl_hmm)
+	mp_hapls = []
+	hapl_pair_dict = {}
+	next_hapl_pairs = {}
+	back_pair_ptrs = []
+	#next_hapls = []
+	#thapls = []
+	#node_list = []
+	indices = [0, 1]
+	# determine the start indices corresponding to the '1' and '0'
+	plen = len(psym)
+	for ii in range(plen):
+		if psym[ii][1] == '0':
+			indices[0] = ii
+		else:
+			indices[1] = ii
+	# [[sum log probs, cur_0, cur_1], ...] <--- maybe not necessary
+	# {(cur_0, cur_1) : sum_log_probs, (cur_0, cur_1) : idx_1,}
+	# {(next_0, next_1) : [sum log probs, sym_0, sym_1, (cur_0, cur_1)]}
+	# After constructing all of these, generate the next 
+	# ok, I should maintain a series of backpointers: for each pair in the
+	# next level, compare the 
+	# the first level should just contain the symbols associated
+	# [{(0, 2) : ('0', '1')}, {(0, 2) : ((1, 2), '0', '1'), 
+	# (2, 0) : ((2, 1), '1', '0')}, {(0, 0) : ((0, 2), '0', '1')}]
+
+	# for each genotype, traverse the HMM to find the most likely pair of
+	# haplotypes. merge them when they arrive at the same pair of vertices
+	for ii in range(glen):
+		# first, initialize the haplotype pair: if the marker is homozygous,
+		# we will only have one pair, but two for heterozygous ((0,1) v. (1,0))
+		# also initialize the probability, a sum of logs
+		# for each proposed path, retain all of the haplotypes and their
+		# sum of logs (probability)
+		# then, for the next layer, simply calculate all the possible pairs of
+		# next nodes. for each pair, find the maximum probability associated
+		# with it. if we don't find any acceptable option, I guess we should
+		# do the random jump to a compatible pair (refine later, ofc)
+		if input_t[ii][0] == '2':
+			idx = indices[1]
+			back_pair_ptrs.append({(idx, idx) : ('1', '1')})
+			hapl_pair_dict[(idx, idx)] = 2.0 * math.log10(pis[idx])
+		elif input_mat[0][jj] == '0':
+			idx = indices[0]
+			back_pair_ptrs.append({(idx, idx) : ('0', '0')})
+			hapl_pair_dict[(idx, idx)] = 2.0 * math.log10(pis[idx])
+		else:
+			# oh, I can just arbitrarily calculate ('0', '1'): there's no point
+			# in doing ('1', '0') here too!!!
+			back_pair_ptrs.append({(indices[1], indices[0]) : ('1', '0')})
+			hapl_pair_dict[(idx, idx)] = math.log10(pis[indices[1]]) + math.log10(pis[indices[0]])
+		# now construct each layer
+		for jj in range(hlen):
+
+		# then backtrack on back_pair_ptrs and then reverse the generated
+		# haplotypes
+
 # also have function to sample the haplotypes
 def main(fname):
 	print(fname)
@@ -483,7 +545,7 @@ def main(fname):
 	print('Constructed random haplotypes')
 	for ii in range(10):
 		local_graph = localized_hapl_cluster(hapls)
-		print(local_graph)
+		#print(local_graph)
 		#lens = []
 		#for ele in local_graph:
 		#	lens.append(len(ele))
@@ -493,12 +555,12 @@ def main(fname):
 		# I'm thinking I might be able to get away with just constructing a hapl_hmm
 		# and then just keep track of pairs?
 		pis, hapl_hmm, t_prev, psym = construct_dipl(local_graph)
-		print(pis)
+		'''print(pis)
 		print(hapl_hmm)
 		print(t_prev)
 		print(len(t_prev))
 		print(len(hapl_hmm))
-		print(psym)
+		print(psym)'''
 		'''for row in hapl_hmm:
 			print(row)
 		print(len(hapl_hmm))'''
@@ -506,18 +568,18 @@ def main(fname):
 		hapls = generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat)
 		hapls.reverse()
 		input_mat.reverse()
-		print(len(hapls))
-		print(len(hapls[0]))
+		#print(len(hapls))
+		#print(len(hapls[0]))
 		# remember to reverse the order with every other iteration
 		print('Completed iteration {}'.format(ii))
 	local_graph = localized_hapl_cluster(hapls)
-	print(local_graph)
+	#print(local_graph)
 	pis, hapl_hmm, t_prev, psym = construct_dipl(local_graph)
-	for row in hapl_hmm:
-		print(len(row))
+	#for row in hapl_hmm:
+	#	print(len(row))
 	print('Running Viterbi algorithm on final HMM')
-	#hapls = dipl_viterbi(hapl_hmm, input_mat)
-	#then, print hapls
+	hapls = dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat)
+	#then, write hapls to file
 	#process_geno(reorient_genos(input_mat[idx:]))
 
 if __name__=="__main__":
