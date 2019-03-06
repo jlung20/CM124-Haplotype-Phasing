@@ -6,7 +6,7 @@ import math
 import itertools
 from collections import defaultdict
 
-dups = 5
+dups = 2
 outfile = ""
 
 # return the transposed matrix
@@ -67,7 +67,7 @@ def merge_all(hapl_dict):
 
 # compute pairwise threshold
 def thresh(n1, n2):
-	return math.sqrt((1.0/sum(n1[2])) + (1.0/sum(n2[2]))) * math.sqrt(dups) * .75
+	return math.sqrt((1.0/sum(n1[2])) + (1.0/sum(n2[2]))) * math.sqrt(dups) * .9 #.75
 
 # get all pairs and compute the threshold. find the minimum and we're chilling
 def min_thresh(hapl_dict):
@@ -103,7 +103,7 @@ def merge_score(n1, n2, hapls, idx2, min_diff, hapl_len):
 	# windowing hyperparameter: this might really be a mistake. check later.
 	depth = 0
 	#print('Before while loop')
-	while idx2 < hapl_len and (len(merge_dict_1) != 0 or len(merge_dict_2) != 0) and depth < 100:
+	while idx2 < hapl_len and (len(merge_dict_1) != 0 or len(merge_dict_2) != 0) and depth < 40:
 		depth += 1
 		post_merge_1 = {}
 		post_merge_2 = {}
@@ -389,10 +389,11 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 						nn = find_next(node_list[nl_idx], '1', t_prev_row)
 						if nn == -1:
 							#print('Problem 2')
-							for ele in hapl_row.keys():
+							'''for ele in hapl_row.keys():
 								if ele[2] == '1':
 									next_nodes.append(ele[1])
-									break
+									break'''
+							next_nodes.append(find_next(node_list[nl_idx], '0', t_prev_row))
 						else:
 							next_nodes.append(nn)
 						nl_idx += 1
@@ -403,10 +404,11 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 						nn = find_next(node_list[nl_idx], '0', t_prev_row)
 						if nn == -1:
 							#print('Problem 0')
-							for ele in hapl_row.keys():
+							'''for ele in hapl_row.keys():
 								if ele[2] == '0':
 									next_nodes.append(ele[1])
-									break
+									break'''
+							next_nodes.append(find_next(node_list[nl_idx], '1', t_prev_row))
 						else:
 							next_nodes.append(nn)
 						nl_idx += 1
@@ -429,7 +431,7 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 						print(t_prev_row)
 						print(hapl_row)
 						print(next_hapls)'''
-						zero_unsat = True
+						'''zero_unsat = True
 						one_unsat = True
 						for ele in hapl_row.keys():
 							if ele[2] == '0':
@@ -442,7 +444,29 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 								thapls.append('1')
 								one_unsat = False
 							if not zero_unsat and not one_unsat:
-								break
+								break'''
+						if np.random.binomial(1, 0.5, 1) == 1:
+							if zero_zero != 0.0:
+								thapls.append('0')
+								thapls.append('1')
+								next_nodes.append(n00)
+								next_nodes.append(n10)
+							else:
+								thapls.append('1')
+								thapls.append('0')
+								next_nodes.append(n01)
+								next_nodes.append(n11)
+						else:
+							if one_one != 0.0:
+								thapls.append('0')
+								thapls.append('1')
+								next_nodes.append(n01)
+								next_nodes.append(n11)
+							else:
+								thapls.append('1')
+								thapls.append('0')
+								next_nodes.append(n00)
+								next_nodes.append(n10)
 						nl_idx += 2
 						#sys.exit(-1)
 					else:
@@ -548,8 +572,9 @@ def dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat):
 		else:
 			# oh, I can just arbitrarily calculate ('0', '1'): there's no point
 			# in doing ('1', '0') here too!!!
-			back_pair_ptrs.append({(idx, idx) : ('1', '0')})
-			hapl_pair_dict[(idx, idx)] = math.log10(pis[indices[1]]) + math.log10(pis[indices[0]])
+			ids = (indices[1], indices[0])
+			back_pair_ptrs.append({ids : ('1', '0')})
+			hapl_pair_dict[ids] = math.log10(pis[indices[1]]) + math.log10(pis[indices[0]])
 		#print(hapl_pair_dict)
 		#print(back_pair_ptrs)
 		#print(input_t[ii][0])
@@ -646,8 +671,9 @@ def main(fname):
 	hapls = rand_compat_hapls(input_mat, dups) #10)
 	local_graph = []
 	hapl_hmm = []
+	input_rev = input_mat[::-1]
 	print('Constructed random haplotypes')
-	for ii in range(10):
+	for ii in range(6):
 		local_graph = localized_hapl_cluster(hapls)
 		#print(local_graph)
 		lens = []
@@ -659,6 +685,8 @@ def main(fname):
 		# I'm thinking I might be able to get away with just constructing a hapl_hmm
 		# and then just keep track of pairs?
 		pis, hapl_hmm, t_prev, psym = construct_dipl(local_graph)
+		if ii % 2 == 0:
+			print_haplotypes(reorient_genos(dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat)))
 		'''print(pis)
 		print(hapl_hmm)
 		print(t_prev)
@@ -669,15 +697,17 @@ def main(fname):
 			print(row)
 		print(len(hapl_hmm))'''
 		#sys.exit(-1)
-		hapls = generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat)
+		if ii % 2 == 0:
+			hapls = generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat)
+		else:
+			hapls = generate_new_samples(hapl_hmm, pis, t_prev, psym, input_rev)
 		hapls.reverse()
-		input_mat.reverse()
+		#input_mat.reverse()
 		#print(len(hapls))
 		#print(len(hapls[0]))
 		# remember to reverse the order with every other iteration
 		print('Completed iteration {}'.format(ii))
 	local_graph = localized_hapl_cluster(hapls)
-	#print(local_graph)
 	pis, hapl_hmm, t_prev, psym = construct_dipl(local_graph)
 	#for row in hapl_hmm:
 	#	print(len(row))
