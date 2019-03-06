@@ -6,7 +6,7 @@ import math
 import itertools
 from collections import defaultdict
 
-dups = 3
+dups = 5
 outfile = ""
 
 # return the transposed matrix
@@ -67,7 +67,7 @@ def merge_all(hapl_dict):
 
 # compute pairwise threshold
 def thresh(n1, n2):
-	return math.sqrt((1.0/sum(n1[2])) + (1.0/sum(n2[2])))
+	return math.sqrt((1.0/sum(n1[2])) + (1.0/sum(n2[2]))) * math.sqrt(dups) * .75
 
 # get all pairs and compute the threshold. find the minimum and we're chilling
 def min_thresh(hapl_dict):
@@ -103,7 +103,7 @@ def merge_score(n1, n2, hapls, idx2, min_diff, hapl_len):
 	# windowing hyperparameter: this might really be a mistake. check later.
 	depth = 0
 	#print('Before while loop')
-	while idx2 < hapl_len and (len(merge_dict_1) != 0 or len(merge_dict_2) != 0) and depth < 50:
+	while idx2 < hapl_len and (len(merge_dict_1) != 0 or len(merge_dict_2) != 0) and depth < 100:
 		depth += 1
 		post_merge_1 = {}
 		post_merge_2 = {}
@@ -464,6 +464,39 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 	#print(next_hapls)
 	return next_hapls
 
+def update_next_hapl_pairs(next_hapl_pairs, hapl_pair_dict, idx_pair, pair, t_prev_row, hapl_row):
+	next = [-1, -1]
+	lprob = [-1000.0, -1000.0]
+	for lolz in range(2):
+		prob, nn = find_next_with_prob(idx_pair[lolz], pair[lolz], t_prev_row, hapl_row)
+		#print((prob, nn))
+		if nn == -1:
+			#print('Problem: {}'.format(pair))
+			maxn = -1
+			maxlprob = -1000.0
+			for ele in hapl_row.keys():
+				if ele[2] == pair[lolz] and math.log10(hapl_row[ele]) - 8 > maxlprob:
+					maxlprob = math.log10(hapl_row[ele]) - 8
+					maxn = ele[1]
+					break
+			next[lolz] = maxn
+			lprob[lolz] = maxlprob
+		else:
+			next[lolz] = nn
+			lprob[lolz] = math.log10(prob)
+	if next[0] == -1 or next[1] == -1:
+		#print(t_prev_row)
+		#print(hapl_row)
+		return
+	# {(next_0, next_1) : [sum log probs, sym_0, sym_1, (cur_0, cur_1)]}
+	if (next[0], next[1]) not in next_hapl_pairs:
+		next_hapl_pairs[(next[0], next[1])] = \
+			[hapl_pair_dict[idx_pair] + sum(lprob), pair[0], pair[1], idx_pair]
+	elif hapl_pair_dict[idx_pair] + sum(lprob) > next_hapl_pairs[(next[0], next[1])][0]:
+		next_hapl_pairs[(next[0], next[1])] = \
+			[hapl_pair_dict[idx_pair] + sum(lprob), pair[0], pair[1], idx_pair]
+	return
+
 # computes the most likely haplotypes for each individual, conditional on 
 # the HMM and genotype
 def dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat):
@@ -471,12 +504,6 @@ def dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat):
 	glen = len(input_t)
 	hlen = len(hapl_hmm)
 	mp_hapls = []
-	hapl_pair_dict = {}
-	next_hapl_pairs = {}
-	back_pair_ptrs = []
-	#next_hapls = []
-	#thapls = []
-	#node_list = []
 	indices = [0, 1]
 	# determine the start indices corresponding to the '1' and '0'
 	plen = len(psym)
@@ -492,8 +519,8 @@ def dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat):
 	# ok, I should maintain a series of backpointers: for each pair in the
 	# next level, compare the 
 	# the first level should just contain the symbols associated
-	# [{(0, 2) : ('0', '1')}, {(0, 2) : ((1, 2), '0', '1'), 
-	# (2, 0) : ((2, 1), '1', '0')}, {(0, 0) : ((0, 2), '0', '1')}]
+	# [{(0, 2) : ('0', '1')}, {(0, 2) : ('0', '1', (1, 2)), 
+	# (2, 0) : ('1', '0', (2, 1))}, {(0, 0) : ('0', '1', (0, 2))}]
 
 	# for each genotype, traverse the HMM to find the most likely pair of
 	# haplotypes. merge them when they arrive at the same pair of vertices
@@ -507,31 +534,108 @@ def dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat):
 		# next nodes. for each pair, find the maximum probability associated
 		# with it. if we don't find any acceptable option, I guess we should
 		# do the random jump to a compatible pair (refine later, ofc)
+		hapl_pair_dict = {}
+		back_pair_ptrs = []
 		if input_t[ii][0] == '2':
 			idx = indices[1]
+			# idx, idx
 			back_pair_ptrs.append({(idx, idx) : ('1', '1')})
 			hapl_pair_dict[(idx, idx)] = 2.0 * math.log10(pis[idx])
-		elif input_mat[0][jj] == '0':
+		elif input_t[ii][0] == '0':
 			idx = indices[0]
 			back_pair_ptrs.append({(idx, idx) : ('0', '0')})
 			hapl_pair_dict[(idx, idx)] = 2.0 * math.log10(pis[idx])
 		else:
 			# oh, I can just arbitrarily calculate ('0', '1'): there's no point
 			# in doing ('1', '0') here too!!!
-			back_pair_ptrs.append({(indices[1], indices[0]) : ('1', '0')})
+			back_pair_ptrs.append({(idx, idx) : ('1', '0')})
 			hapl_pair_dict[(idx, idx)] = math.log10(pis[indices[1]]) + math.log10(pis[indices[0]])
+		#print(hapl_pair_dict)
+		#print(back_pair_ptrs)
+		#print(input_t[ii][0])
 		# now construct each layer
 		for jj in range(hlen):
-
+			# determine the best next_hapl_pairs
+			next_hapl_pairs = {}
+			t_prev_row = t_prev[jj]
+			hapl_row = hapl_hmm[jj]
+			#print(input_t[ii][jj + 1])
+			for idx_pair in hapl_pair_dict:
+				# Quick thought: we can penalize the transitions pretty easily!
+				# Just add -8 when we find we're stuck and then pick a new node
+				if input_t[ii][jj + 1] == '2':
+					update_next_hapl_pairs(next_hapl_pairs, hapl_pair_dict, idx_pair, ['1', '1'], t_prev_row, hapl_row)
+				elif input_t[ii][jj + 1] == '0':
+					update_next_hapl_pairs(next_hapl_pairs, hapl_pair_dict, idx_pair, ['0', '0'], t_prev_row, hapl_row)
+				else:
+					update_next_hapl_pairs(next_hapl_pairs, hapl_pair_dict, idx_pair, ['1', '0'], t_prev_row, hapl_row)
+					update_next_hapl_pairs(next_hapl_pairs, hapl_pair_dict, idx_pair, ['0', '1'], t_prev_row, hapl_row)
+				#print(next_hapl_pairs)
+			# then update hapl_pair_dict and back_pair_ptrs
+			hapl_pair_dict = {}
+			tback = {}
+			for pair in next_hapl_pairs:
+				res = next_hapl_pairs[pair]
+				hapl_pair_dict[pair] = res[0]
+				tback[pair] = (res[1], res[2], res[3])
+			back_pair_ptrs.append(tback)
 		# then backtrack on back_pair_ptrs and then reverse the generated
 		# haplotypes
+		rev_hapls = [[], []]
+		#print(back_pair_ptrs[-1].keys())
+		vertices = back_pair_ptrs[-1].keys()[0]
+		for back_ptrs in reversed(back_pair_ptrs):
+			#print(back_ptrs)
+			#res = []
+			res = back_ptrs[vertices]
+			'''
+			try: 
+				res = back_ptrs[vertices]
+			except:
+				print('Fix this stupid problem')
+				res = back_ptrs.values()[0]'''
+			rev_hapls[0].append(res[0])
+			rev_hapls[1].append(res[1])
+			if len(res) == 3:
+				vertices = res[2]
+		mp_hapls.append(rev_hapls[0][::-1])
+		mp_hapls.append(rev_hapls[1][::-1])
+	return mp_hapls
+
+# expects h_t to be the transpose of the matrix of haplotypes (i.e. h_t[0]
+# is the first allele? of each haplotype
+def print_haplotypes(h_t):
+	#h_t = reorient_genos(hapl)
+	#print(outfile)
+	with(open(outfile, "a+")) as f:
+		rlen = len(h_t[0])
+		row_cnt = len(h_t)
+		#if row_cnt == step + 1:
+		#	row_cnt = step
+		'''for jj in range(row_cnt):
+			for ii in range(rlen - 1):
+				f.write(h_t[jj][ii] + ' ')
+			f.write(h_t[jj][rlen - 1] + '\n')'''
+		for row in h_t:
+			for ii in range(rlen - 1):
+				f.write(row[ii] + ' ')
+			f.write(row[rlen - 1] + '\n')
+
+		'''
+		hapl_len = len(hapl[0])
+		num_hapls = len(hapl)
+		for ii in range(hapl_len):
+			for jj in range(num_hapls - 1):
+				f.write(hapl[jj][ii] + ' ')
+			f.write(hapl[num_hapls - 1][ii] + '\n')'''
+	return
 
 # also have function to sample the haplotypes
 def main(fname):
 	print(fname)
 	global outfile
 	# CHANGE THIS LINE LATER!!! CURRENTLY TRYING TO AVOID OVERWRITING THE ACTUAL FILE
-	outfile = fname[:-4] + "_sol_wip.txt"
+	outfile = fname[:-4] + "_sol_wip_2.txt"
 	print(outfile)
 	input_mat = []
 	with(open(fname, 'rb')) as f:
@@ -546,10 +650,10 @@ def main(fname):
 	for ii in range(10):
 		local_graph = localized_hapl_cluster(hapls)
 		#print(local_graph)
-		#lens = []
-		#for ele in local_graph:
-		#	lens.append(len(ele))
-		#print(lens)
+		lens = []
+		for ele in local_graph:
+			lens.append(len(ele))
+		print(lens)
 		'''print('-------')
 		print(len(local_graph))'''
 		# I'm thinking I might be able to get away with just constructing a hapl_hmm
@@ -579,6 +683,8 @@ def main(fname):
 	#	print(len(row))
 	print('Running Viterbi algorithm on final HMM')
 	hapls = dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat)
+	hapls_t = reorient_genos(hapls)
+	print_haplotypes(hapls_t)
 	#then, write hapls to file
 	#process_geno(reorient_genos(input_mat[idx:]))
 
