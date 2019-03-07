@@ -228,8 +228,8 @@ def localized_hapl_cluster(hapls):
 		index_set.add(ii)
 	l_graph.append([[[-1], ['-1'], [], index_set]])
 	for ii in range(hlen):
-		if ii % 100 == 0:
-			print(ii)
+		#if ii % 100 == 0:
+		#	print(ii)
 		# use idx rather than ii because l_graph has one level before 1st iter
 		idx = ii + 1
 		# split (i.e., create next level)
@@ -660,7 +660,7 @@ def main(fname):
 	print(fname)
 	global outfile
 	# CHANGE THIS LINE LATER!!! CURRENTLY TRYING TO AVOID OVERWRITING THE ACTUAL FILE
-	outfile = fname[:-4] + "_sol_wip_2.txt"
+	outfile = fname[:-4] + "_sol.txt"
 	print(outfile)
 	input_mat = []
 	with(open(fname, 'rb')) as f:
@@ -673,20 +673,23 @@ def main(fname):
 	hapl_hmm = []
 	input_rev = input_mat[::-1]
 	print('Constructed random haplotypes')
-	for ii in range(6):
+	iters = 6
+	if len(input_mat) > 50000:
+		iters = 4
+	for ii in range(iters):
 		local_graph = localized_hapl_cluster(hapls)
 		#print(local_graph)
 		lens = []
-		for ele in local_graph:
+		'''for ele in local_graph:
 			lens.append(len(ele))
-		print(lens)
+		print(lens)'''
 		'''print('-------')
 		print(len(local_graph))'''
 		# I'm thinking I might be able to get away with just constructing a hapl_hmm
 		# and then just keep track of pairs?
 		pis, hapl_hmm, t_prev, psym = construct_dipl(local_graph)
-		if ii % 2 == 0:
-			print_haplotypes(reorient_genos(dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat)))
+		#if ii % 2 == 0:
+		#	print_haplotypes(reorient_genos(dipl_viterbi(pis, hapl_hmm, t_prev, psym, input_mat)))
 		'''print(pis)
 		print(hapl_hmm)
 		print(t_prev)
