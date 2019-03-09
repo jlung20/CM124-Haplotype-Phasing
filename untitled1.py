@@ -426,6 +426,7 @@ def generate_new_samples(hapl_hmm, pis, t_prev, psym, input_mat):
 def update_next_hapl_pairs(next_hapl_pairs, hapl_pair_dict, idx_pair, pair, t_prev_row, hapl_row):
 	next = [-1, -1]
 	lprob = [-1000.0, -1000.0]
+	problems = [False, False]
 	for lolz in range(2):
 		prob, nn = find_next_with_prob(idx_pair[lolz], pair[lolz], t_prev_row, hapl_row)
 		if nn == -1:
@@ -438,12 +439,49 @@ def update_next_hapl_pairs(next_hapl_pairs, hapl_pair_dict, idx_pair, pair, t_pr
 					break
 			next[lolz] = maxn
 			lprob[lolz] = maxlprob
+			problems[lolz] = True
 		else:
 			next[lolz] = nn
 			lprob[lolz] = math.log10(prob)
 	if next[0] == -1 or next[1] == -1:
 		return
 	# {(next_0, next_1) : [sum log probs, sym_0, sym_1, (cur_0, cur_1)]}
+	if (next[0], next[1]) not in next_hapl_pairs:
+		next_hapl_pairs[(next[0], next[1])] = \
+			[hapl_pair_dict[idx_pair] + sum(lprob), pair[0], pair[1], idx_pair]
+	elif hapl_pair_dict[idx_pair] + sum(lprob) > next_hapl_pairs[(next[0], next[1])][0]:
+		next_hapl_pairs[(next[0], next[1])] = \
+			[hapl_pair_dict[idx_pair] + sum(lprob), pair[0], pair[1], idx_pair]
+	# so I want to provide the options of both recombination
+	# and error in a single haplotype; in the latter case, if both
+	# are a mistake, then just move to the next position for both
+	# with the wrong symbol. if only one is a mistake, take the
+	# move to the wrong symbol in one case
+	if any(problems):
+		if all(problems):
+			for lolz in range(2):
+				sym = '0'
+				if pair[lolz] == '0':
+					sym = '1'
+				prob, nn = find_next_with_prob(idx_pair[lolz], sym, t_prev_row, hapl_row)
+				next[lolz] = nn
+				lprob[lolz] = math.log10(prob) - 8
+		elif problems[0]:
+			sym = '0'
+			if pair[0] == '0':
+				sym = '1'
+			prob, nn = find_next_with_prob(idx_pair[0], sym, t_prev_row, hapl_row)
+			next[0] = nn
+			lprob[0] = math.log10(prob) - 8
+		else: #problems[1] == True
+			sym = '0'
+			if pair[1] == '0':
+				sym = '1'
+			prob, nn = find_next_with_prob(idx_pair[1], sym, t_prev_row, hapl_row)
+			next[1] = nn
+			lprob[1] = math.log10(prob) - 8
+	if next[0] == -1 or next[1] == -1:
+		return
 	if (next[0], next[1]) not in next_hapl_pairs:
 		next_hapl_pairs[(next[0], next[1])] = \
 			[hapl_pair_dict[idx_pair] + sum(lprob), pair[0], pair[1], idx_pair]
